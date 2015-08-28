@@ -10,7 +10,8 @@
 #define PINI_BATT_MON        A7   // Battery level input
 #define PINI_RUNNING         A0   // Running signal from RasPi
 #define PINO_SHUTDOWN         6   // Shutdown signal to RasPi
-#define PINO_POWER_RASPI      4   // Enable for 5V to RasPi
+#define PINO_POWER_RASPI      4   // 5V on/off switch to RasPi
+#define PINO_BOOSTER          7   // LiPo-5V Booster chip control
 
 // FSM states
 #define S_POWEROFF   1
@@ -20,8 +21,10 @@
 #define S_SHUTDOWN   5
 
 // Voltage thresholds
-#define GOTPOWER_THRESHOLD   4.4   //
-#define LOSTPOWER_THRESHOLD  4.2   //
+// Full LiPo is around 4.15v and empty 3.3v
+#define GOTPOWER_THRESHOLD   4.4
+#define LOSTPOWER_THRESHOLD  4.2
+#define RUNNING_THRESHOLD    800 // mW
 
 // Sleep periods
 #define POWERCHECK_PERIOD   SLEEP_2S
@@ -35,7 +38,7 @@ float volts_coeff = 0.00322266 * 1.47;
 float volts = 5;
 
 boolean RASPI_RUNNING() {
-  return analogRead(PINI_RUNNING) > 800;
+  return analogRead(PINI_RUNNING) > RUNNING_THRESHOLD;
 }
 
 #ifdef SERIAL_DEBUG
@@ -48,10 +51,12 @@ boolean RASPI_RUNNING() {
 
 
 void setup() {
+  pinMode(PINO_BOOSTER, OUTPUT);
   pinMode(PINO_SHUTDOWN, OUTPUT);
   pinMode(PINI_RUNNING, INPUT);
   pinMode(PINO_POWER_RASPI, OUTPUT);
-  pinMode(A7, INPUT);
+  pinMode(PINI_BATT_MON, INPUT);
+  digitalWrite(PINO_BOOSTER, LOW);  // all down on initial power on
   digitalWrite(PINO_SHUTDOWN, LOW);
   digitalWrite(PINO_POWER_RASPI, LOW);
 
@@ -70,6 +75,7 @@ void loop() {
       DEBUG("Power off... ");
       
       if (volts > GOTPOWER_THRESHOLD) {
+        digitalWrite(PINO_BOOSTER, HIGH);
         digitalWrite(PINO_POWER_RASPI, HIGH);
         state = S_BOOTUP;
       }
@@ -81,6 +87,7 @@ void loop() {
       if (RASPI_RUNNING()) {
         state = S_POWERON;
       }
+      // todo recovery if power lost and no bootup
       break;
 
     case S_POWERON:
@@ -92,7 +99,7 @@ void loop() {
       break;
 
     case S_LOSTPOWER:  // Let's doublecheck if we really lost the power...
-      DEBUG("Did we just lose power? ");
+      DEBUG("Power lost? ");
             
       LowPower.powerDown(POWERCHECK_PERIOD, ADC_OFF, BOD_ON);
       
@@ -111,7 +118,8 @@ void loop() {
             
       if (!RASPI_RUNNING()) {
         LowPower.powerDown(SHUTDOWN_DELAY, ADC_OFF, BOD_ON);
-        digitalWrite(PINO_POWER_RASPI, LOW);
+        digitalWrite(PINO_POWER_RASPI, LOW);  // 5V output off
+        digitalWrite(PINO_BOOSTER, LOW);      // Booster off
         digitalWrite(PINO_SHUTDOWN, LOW);
         state = S_POWEROFF;
       }
