@@ -13,3 +13,7 @@ Hardware modifications to MightyBoost required:
 * Cut the PCB trace from VCC to booster IC [SC4501](http://www.semtech.com/images/datasheet/sc4501.pdf) pin 3 (nSHDN)
 * Connect the booster IC pin 3 to D7 Moteino digital output
 * (Remove the permanent 5V LED)
+
+TODO
+* Handle bootup and shutdown failure conditions appropriately
+* (Switch MightyBoost battmon resistor divider into higher impedance for lower current bleed)
